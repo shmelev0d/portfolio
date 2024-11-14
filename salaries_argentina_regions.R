@@ -3,45 +3,33 @@ library(sf)
 library(zoo)
 library(readr)
 
-
 # reading data
 
 df_letra_promedio <- readr::read_csv("https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/salarios/w_mean_depto_total_letra.csv")
 df_clae2 <- readr::read_csv("https://cdn.produccion.gob.ar/cdn-cep/datos-por-departamento/diccionario_clae2.csv")
+geodata <- read_sf("https://raw.githubusercontent.com/shmelev0d/portfolio/main/data/departamentos_arg.geojson")
+
+# overview and check classes
 
 glimpse(df_letra_promedio)
-
-
-geodata <- read_sf("data/departamentos_arg.geojson")
 ggplot(geodata) + 
   geom_sf(aes(fill = provincia))
-
-# checking classes
 
 class(df_letra_promedio$codigo_departamento_indec)
 class(geodata$codigo_departamento_indec)
 
 
-# data exploration shows the impact of outliers
-mean(df_letra_promedio$w_mean)
-median(df_letra_promedio$w_mean)
-mad(df_letra_promedio$w_mean)
-sd(df_letra_promedio$w_mean)
-mean(df_letra_promedio$w_mean, trim = 0.35)
-IQR(df_letra_promedio$w_mean)
+# data preparation: joining data frames and removing NA values
 
 
-# data preparation
-
-# prepare the dictionary
+## cleaning duplicates and NA values in the dictionary
 
 df_clae2 <- df_clae2 %>%
   select(letra, letra_desc) %>%
   distinct() %>%
   mutate(letra = ifelse(is.na(letra), "Z", letra))
-df_clae2
 
-# join dataframe with the dictionary
+## joining data frame and the dictionary
 
 df_letra_promedio <- df_letra_promedio %>%
   left_join(df_clae2, by = "letra") %>%
@@ -49,9 +37,7 @@ df_letra_promedio <- df_letra_promedio %>%
   select(year, codigo_departamento_indec, id_provincia_indec, letra, letra_desc, w_mean) %>%
   filter(id_provincia_indec != 2)
 
-df_letra_promedio
-
-# counting NAs (-99)
+## dealing with NA values (-99)
 
 number_NAs <- df_letra_promedio %>%
   group_by(letra_desc) %>%
@@ -59,60 +45,37 @@ number_NAs <- df_letra_promedio %>%
             NAs_by_sectors = sum(w_mean == -99), 
             NAs_prct = sum(w_mean== -99) / n() * 100)
 
-number_NAs
 
 ggplot(number_NAs, aes(x = letra_desc)) +
   geom_col(aes(y = total_cases), fill = "skyblue", alpha = 0.7) +
   geom_col(aes(y = NAs_by_sectors), fill = "red", alpha = 0.5) + 
   coord_flip()
 
-# turning -99 records to NAs
+### turning -99 records to NAs
 
 df_letra_promedio$w_mean[df_letra_promedio$w_mean == -99] <- NA
 
 
-## substituting NAs with median salaries by the sector
-# creating a dataframe of median salaries
+### substituting NAs with the median salaries by sector
+#### creating the dataframe of the median salaries
 median_salaries <- df_letra_promedio %>%
   group_by(letra_desc) %>%
   summarise(median_salary = median(w_mean, na.rm = TRUE))
-median_salaries
+
+#### if w_mean is na. change to median salary
 
 df_letra_promedio <- df_letra_promedio %>%
   left_join(median_salaries, by = "letra_desc") %>%
-  mutate(w_mean = ifelse(is.na(w_mean), median_salary, w_mean)) %>%  # if w_mean is na. change to median_salary
+  mutate(w_mean = ifelse(is.na(w_mean), median_salary, w_mean)) %>%  
   select(-median_salary)
 
-# checking result
-mean(df_letra_promedio$w_mean)
-median(df_letra_promedio$w_mean)
-
-
-# outliers
-
-quantile(df_letra_promedio$w_mean, p = c(0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1))
-
-max(df_letra_promedio$w_mean)
-min(df_letra_promedio$w_mean)
-mad(df_letra_promedio$w_mean)
-sd(df_letra_promedio$w_mean)
-
-ggplot(df_letra_promew_meanggplot(df_letra_promedio, aes(letra_desc, w_mean)) + 
-  geom_boxplot() + 
-  coord_flip()
-
 # preparing geodata
-# in geodata the column codigo_departamento_indec was a character, so I had to turn it into numeric
+# in geodata the column codigo_departamento_indec was a character, needs to be turned into numeric
 
 geodata <- geodata %>%
   filter(codpcia != "02") %>%  # delete CABA
   mutate(codigo_departamento_indec = as.numeric(codigo_departamento_indec)) %>% 
   select(codpcia, departamen, provincia, codigo_departamento_indec, geometry)
-
-geodata
-  
-ggplot(geodata) + 
-  geom_sf(aes(fill = provincia))
 
 
 # Tarea nro 1
@@ -271,7 +234,7 @@ cuatro_sectores_plot
 ggsave('images/cuatro_sectores_plot.png', width = 8, height = 5)
 
 # time transition de cuatro sectores
-
+install.packages("gganimate")
 library(gganimate)
 
 df_cuatro_sectores_agg$year <- as.integer(df_cuatro_sectores_agg$year)
